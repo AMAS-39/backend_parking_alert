@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Model path
-MODEL_PATH = r'C:\Users\Best Center\Contacts\Desktop\backend_parking_alert\best.pt'
+MODEL_PATH = r'best.pt'
 
 # Load the YOLOv5 model globally to avoid reloading for each request
 model = torch.hub.load('ultralytics/yolov5', 'custom', path=MODEL_PATH, force_reload=False, trust_repo=True)

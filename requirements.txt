@@ -12,3 +12,4 @@ firebase-admin
 flask
 flask_cors
 gunicorn
+pytesseract

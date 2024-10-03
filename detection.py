@@ -7,16 +7,19 @@ import re
 import numpy as np
 import easyocr
 import logging
+from pathlib import Path
+import os
+import torch
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Model path
-MODEL_PATH = r'best.pt'
+MODEL_PATH = path(r'best.pt')
 
 # Load the YOLOv5 model globally to avoid reloading for each request
-model = torch.hub.load('ultralytics/yolov5', 'custom', path=MODEL_PATH, force_reload=False, trust_repo=True)
+model = torch.hub.load('ultralytics/yolov5', 'custom', path=str(MODEL_PATH), force_reload=True, trust_repo=True)
 
 # Initialize EasyOCR reader globally
 reader = easyocr.Reader(['en'], gpu=False)  # Set gpu=True if CUDA is available

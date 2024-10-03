@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0
 
 # Install Python dependencies
-COPY requirements.txt requirements.tx
+COPY requirements.txt requirements.txt
 RUN pip install  -r requirements.txt
 
 # Copy the current directory contents into the container

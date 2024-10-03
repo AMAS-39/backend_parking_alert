@@ -1,0 +1,11 @@
+flask
+flask_cors
+torch
+opencv-python
+pytesseract
+numpy
+easyocr
+firebase-admin
+gunicorn
+Pillow
+werkzeug

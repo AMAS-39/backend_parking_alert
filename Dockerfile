@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.tx
+RUN pip install  -r requirements.txt
 
 # Copy the current directory contents into the container
 COPY . .
@@ -20,4 +20,4 @@ COPY . .
 ENV PORT=8080
 
 # Run the application
-CMD ["gunicorn", "app:app", "-b", "0.0.0.0:8080"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]

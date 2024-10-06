@@ -1,5 +1,3 @@
-# detection.py
-
 import torch
 import cv2
 import pytesseract
@@ -8,8 +6,6 @@ import numpy as np
 import easyocr
 import logging
 from pathlib import Path
-import os
-import torch
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -18,11 +14,16 @@ logger = logging.getLogger(__name__)
 # Model path
 MODEL_PATH = Path('best.pt')
 
-# Load the YOLOv5 model globally to avoid reloading for each request
-model = torch.hub.load('ultralytics/yolov5', 'custom', path=str(MODEL_PATH), force_reload=True, trust_repo=True)
+# Set the device to GPU if available, otherwise fallback to CPU
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Initialize EasyOCR reader globally
-reader = easyocr.Reader(['en'], gpu=False)  # Set gpu=True if CUDA is available
+# Load the YOLOv5 model using torch directly and move it to the correct device
+model = torch.load(MODEL_PATH, map_location=device)
+model.to(device)
+model.eval()  # Set the model to evaluation mode
+
+# Initialize EasyOCR reader, use GPU if available
+reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Set GPU to True if available
 
 def extract_plate_components(text):
     """
@@ -44,7 +45,7 @@ def extract_plate_components(text):
         city_code = match.group('city_code')
         number = match.group('number')
 
-        # To extract the letter, find the first uppercase letter after city_code
+        # Extract the letter after the city_code
         letter_match = re.search(r'[A-Z]', text[match.end('city_code'):])
         if letter_match:
             letter = letter_match.group(0)
@@ -80,11 +81,14 @@ def detect_plate_number(image_path=None, image=None):
             logger.error(f"Failed to read image from path: {image_path}")
             return None
 
+    # Convert the image to a tensor and move it to the correct device (CPU/GPU)
+    img_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device).float()
+
     # Run detection
-    results = model(image)
+    results = model(img_tensor)
 
     # Get the detected bounding boxes
-    detections = results.xyxy[0]  # tensor of detections
+    detections = results.xyxy[0].cpu()  # move back to CPU
 
     if len(detections) == 0:
         logger.info("No detections found in the image.")
@@ -102,7 +106,7 @@ def detect_plate_number(image_path=None, image=None):
             x1 = max(x1 - padding_x, 0)
             y1 = max(y1 - padding_y, 0)
             x2 = min(x2 + padding_x, image.shape[1] - 1)
-            y2 = min(y2 + padding_y, image.shape[0] - 1)
+            y2 = min(y2 + padding_x, image.shape[0] - 1)
 
             # Crop the detected license plate region
             plate_region = image[y1:y2, x1:x2]
@@ -160,8 +164,7 @@ def detect_plate_number(image_path=None, image=None):
                 number = number.replace('G', '6').replace('B', '8').replace('Q', '0')
                 number = number.replace('D', '0').replace('A', '4')
                 number = number.replace('?', '7').replace('T', '7')
-                # Remove any non-digit characters
-                number = re.sub(r'[^0-9]', '', number)
+                number = re.sub(r'[^0-9]', '', number)  # Remove any non-digit characters
                 number = number[:5]
                 logger.info(f"Number After Correction: {number}")
 
@@ -184,19 +187,11 @@ def detect_plate_number(image_path=None, image=None):
                     match = re.match(pattern, corrected_text)
                     if match:
                         plate_number = f"{city_code}{letter}{num}"
-                        # Calculate score with weighted corrections
-                        corrections_applied = 0
-                        for orig_digit, corrected_digit in zip(number_original, num):
-                            if orig_digit != corrected_digit:
-                                if (orig_digit == '2' and corrected_digit == '9') or (orig_digit == '9' and corrected_digit == '2'):
-                                    corrections_applied += 0.1  # Lower penalty for known misreads
-                                else:
-                                    corrections_applied += 1  # Higher penalty for other corrections
+                        corrections_applied = sum(1 for a, b in zip(number_original, num) if a != b)
                         plate_scores.append((plate_number, corrections_applied))
                         logger.info(f"Plate Number Found: {plate_number}, Corrections Applied: {corrections_applied}")
 
                 if plate_scores:
-                    # Select the plate number with the least corrections
                     final_plate_number = min(plate_scores, key=lambda x: x[1])[0]
                     logger.info(f"Final Plate Number: {final_plate_number}")
                     return final_plate_number

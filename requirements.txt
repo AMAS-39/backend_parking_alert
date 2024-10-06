@@ -13,3 +13,4 @@ flask
 flask_cors
 gunicorn
 pytesseract
+git+https://github.com/ultralytics/yolov5

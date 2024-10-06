@@ -92,8 +92,8 @@ def detect_plate_number(image_path=None, image=None):
     # Run detection
     results = model(img_tensor)
 
-    # Extract bounding boxes, confidence scores, and classes from the results
-    detections = results.pred[0]  # This returns a tensor with detections: [x1, y1, x2, y2, confidence, class]
+    # YOLOv5 returns detections in the format: [x1, y1, x2, y2, confidence, class]
+    detections = results.xyxy[0]  # Access the bounding boxes, confidences, and classes from results
 
     if len(detections) == 0:
         logger.info("No detections found in the image.")

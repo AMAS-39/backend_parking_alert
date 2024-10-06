@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Model path
-MODEL_PATH = path('best.pt')
+MODEL_PATH = Path('best.pt')
 
 # Load the YOLOv5 model globally to avoid reloading for each request
 model = torch.hub.load('ultralytics/yolov5', 'custom', path=str(MODEL_PATH), force_reload=True, trust_repo=True)

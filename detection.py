@@ -5,6 +5,7 @@ import numpy as np
 import easyocr
 import logging
 from pathlib import Path
+from yolov5 import YOLOv5
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -17,12 +18,9 @@ MODEL_PATH = Path('best.pt')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logger.info(f"Using device: {device}")
 
-# Load the YOLOv5 model using torch directly and move it to the correct device
+# Load the YOLOv5 model using the YOLOv5 package and move it to the correct device
 try:
-    model = torch.load(MODEL_PATH, map_location=device)
-    model = model.autoshape()  # Add autoshape for easier handling
-    model.to(device)
-    model.eval()  # Set the model to evaluation mode
+    model = YOLOv5(MODEL_PATH, device=device)
     logger.info(f"Model loaded successfully on {device}.")
 except Exception as e:
     logger.error(f"Error loading model: {e}")
@@ -91,7 +89,7 @@ def detect_plate_number(image_path=None, image=None):
     img_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device).float()
 
     # Run detection
-    results = model(img_tensor)
+    results = model.predict(img_tensor)
 
     # Get the detected bounding boxes
     detections = results.xyxy[0].cpu()  # move back to CPU for processing

@@ -1,0 +1,37 @@
+body {
+    background-color: #f4f7f6;
+}
+
+.title {
+    font-size: 3rem;
+    color: #007bff;
+}
+
+.card {
+    border-radius: 15px;
+}
+
+.card-header {
+    background-color: #007bff !important;
+    color: white;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border: none;
+    border-radius: 10px;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+#logList {
+    max-height: 300px;
+    overflow-y: scroll;
+}
+
+#logList li {
+    background-color: #f4f7f6;
+}

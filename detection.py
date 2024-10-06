@@ -1,6 +1,5 @@
 import torch
 import cv2
-import pytesseract
 import re
 import numpy as np
 import easyocr
@@ -17,10 +16,15 @@ MODEL_PATH = Path('best.pt')
 # Set the device to GPU if available, otherwise fallback to CPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Load the YOLOv5 model using torch directly and move it to the correct device
-model = torch.load(MODEL_PATH, map_location=device)
-model.to(device)
-model.eval()  # Set the model to evaluation mode
+# Load the YOLOv5 model using torch.hub from the Ultralytics repository, and move it to the correct device
+try:
+    model = torch.hub.load('ultralytics/yolov5', 'custom', path=str(MODEL_PATH), force_reload=True, trust_repo=True)
+    model.to(device)
+    model.eval()  # Set the model to evaluation mode
+    logger.info(f"Model loaded successfully on {device}.")
+except Exception as e:
+    logger.error(f"Error loading model: {e}")
+    raise e
 
 # Initialize EasyOCR reader, use GPU if available
 reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Set GPU to True if available
@@ -88,7 +92,7 @@ def detect_plate_number(image_path=None, image=None):
     results = model(img_tensor)
 
     # Get the detected bounding boxes
-    detections = results.xyxy[0].cpu()  # move back to CPU
+    detections = results.xyxy[0].cpu()  # move back to CPU for processing
 
     if len(detections) == 0:
         logger.info("No detections found in the image.")
@@ -106,7 +110,7 @@ def detect_plate_number(image_path=None, image=None):
             x1 = max(x1 - padding_x, 0)
             y1 = max(y1 - padding_y, 0)
             x2 = min(x2 + padding_x, image.shape[1] - 1)
-            y2 = min(y2 + padding_x, image.shape[0] - 1)
+            y2 = min(y2 + padding_y, image.shape[0] - 1)
 
             # Crop the detected license plate region
             plate_region = image[y1:y2, x1:x2]

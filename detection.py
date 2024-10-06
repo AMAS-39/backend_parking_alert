@@ -15,10 +15,12 @@ MODEL_PATH = Path('best.pt')
 
 # Set the device to GPU if available, otherwise fallback to CPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+logger.info(f"Using device: {device}")
 
-# Load the YOLOv5 model using torch.hub from the Ultralytics repository, and move it to the correct device
+# Load the YOLOv5 model using torch directly and move it to the correct device
 try:
-    model = torch.hub.load('ultralytics/yolov5', 'custom', path=str(MODEL_PATH), force_reload=True, trust_repo=True)
+    model = torch.load(MODEL_PATH, map_location=device)
+    model = model.autoshape()  # Add autoshape for easier handling
     model.to(device)
     model.eval()  # Set the model to evaluation mode
     logger.info(f"Model loaded successfully on {device}.")

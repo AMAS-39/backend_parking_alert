@@ -28,15 +28,13 @@ except Exception as e:
     raise e
 
 # Initialize EasyOCR reader, use GPU if available
-reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Set GPU to True if available
+reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 
 def extract_plate_components(text):
     """
     Extracts city code, letter, and number from the license plate text.
-    
     Args:
         text (str): The cleaned license plate text.
-    
     Returns:
         tuple or None: (city_code, letter, number) if extraction is successful, else None.
     """
@@ -64,90 +62,60 @@ def extract_plate_components(text):
         logger.warning("Plate pattern did not match.")
         return None
 
-def detect_plate_number(image_path=None, image=None):
+def detect_plate_number(image_path=None):
     """
     Detects the license plate number from an image.
-
     Args:
         image_path (str): Path to the image file.
-        image (numpy.ndarray): Image array.
-
     Returns:
         str or None: Detected plate number or None if not found.
     """
-    if image is None and image_path is None:
+    if image_path is None:
         logger.error("No image provided to detect_plate_number.")
         return None
 
-    # Load image from path or use provided image array
+    # Load image from path
+    image = cv2.imread(image_path)
     if image is None:
-        image = cv2.imread(image_path)
-        if image is None:
-            logger.error(f"Failed to read image from path: {image_path}")
-            return None
+        logger.error(f"Failed to read image from path: {image_path}")
+        return None
 
-    # Convert the image to a tensor and move it to the correct device (CPU/GPU)
-    img_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device).float()
-
-    # Run detection
-    results = model(img_tensor)
-
-    # YOLOv5 returns detections in the format: [x1, y1, x2, y2, confidence, class]
-    detections = results.xyxy[0]  # Access the bounding boxes, confidences, and classes from results
+    # Run YOLOv5 inference
+    results = model(image)
+    detections = results.xyxy[0]
 
     if len(detections) == 0:
-        logger.info("No detections found in the image.")
+        logger.info("No license plates detected in the image.")
         return None
-    else:
-        # Loop over detections
-        for idx, det in enumerate(detections):
-            x1, y1, x2, y2, conf, cls = det[:6].cpu().numpy()  # move to CPU and extract values
-            x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
 
-            # Adjust padding
-            padding_x = int((x2 - x1) * 0.02)  # 2% padding
-            padding_y = int((y2 - y1) * 0.05)  # 5% padding
+    # Extract detected plates
+    for det in detections:
+        x1, y1, x2, y2, conf, cls = det[:6].cpu().numpy()
+        x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
 
-            x1 = max(x1 - padding_x, 0)
-            y1 = max(y1 - padding_y, 0)
-            x2 = min(x2 + padding_x, image.shape[1] - 1)
-            y2 = min(y2 + padding_y, image.shape[0] - 1)
+        # Crop the detected plate region from the image
+        plate_image = image[y1:y2, x1:x2]
 
-            # Crop the detected license plate region
-            plate_region = image[y1:y2, x1:x2]
+        # Convert to grayscale and apply adaptive thresholding
+        gray_plate = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray_plate, (5, 5), 0)
+        _, thresh_plate = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            # Preprocess the image
-            gray_plate = cv2.cvtColor(plate_region, cv2.COLOR_BGR2GRAY)
+        # Apply OCR using EasyOCR
+        ocr_results = reader.readtext(thresh_plate, detail=0)
+        text_easyocr = ''.join(ocr_results)
+        logger.info(f"Extracted Text with EasyOCR: {text_easyocr}")
 
-            # Apply CLAHE
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            gray_plate = clahe.apply(gray_plate)
+        # Preprocess the text
+        text = text_easyocr.upper()
+        text = re.sub(r'\s+', '', text)  # Remove all whitespace
+        text = re.sub(r'[^A-Z0-9]', '', text)  # Remove any non-alphanumeric characters
+        logger.info(f"Cleaned Text: {text}")
 
-            # Apply sharpening
-            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-            gray_plate = cv2.filter2D(gray_plate, -1, kernel)
-
-            # Apply thresholding
-            blur = cv2.GaussianBlur(gray_plate, (5, 5), 0)
-            _, thresh_plate = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-            # Apply OCR using EasyOCR
-            result_easyocr = reader.readtext(thresh_plate, detail=0)
-            text_easyocr = ''.join(result_easyocr)
-            logger.info(f"Extracted Text with EasyOCR: {text_easyocr}")
-
-            # Preprocess the text
-            text = text_easyocr.upper()
-            text = re.sub(r'\s+', '', text)  # Remove all whitespace
-            text = re.sub(r'[^A-Z0-9]', '', text)  # Remove any non-alphanumeric characters
-            logger.info(f"Cleaned Text: {text}")
-
-            # Extract plate components
-            components = extract_plate_components(text)
-
-            if components:
-                city_code, letter, number = components
-
-                return f"{city_code}{letter}{number}"
+        # Extract plate components
+        components = extract_plate_components(text)
+        if components:
+            city_code, letter, number = components
+            return f"{city_code}{letter}{number}"
 
     return None

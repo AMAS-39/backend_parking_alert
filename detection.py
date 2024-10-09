@@ -98,11 +98,23 @@ def detect_plate_number(image_path=None):
 
         # Convert to grayscale and apply adaptive thresholding
         gray_plate = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray_plate, (5, 5), 0)
-        _, thresh_plate = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Apply CLAHE for better contrast
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced_plate = clahe.apply(gray_plate)
+
+        # Apply sharpening to highlight characters
+        sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+        sharpened_plate = cv2.filter2D(enhanced_plate, -1, sharpen_kernel)
+
+        # Apply Gaussian Blur for noise reduction
+        blurred_plate = cv2.GaussianBlur(sharpened_plate, (3, 3), 0)
+
+        # Use Otsu's thresholding for better binarization
+        _, binary_plate = cv2.threshold(blurred_plate, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         # Apply OCR using EasyOCR
-        ocr_results = reader.readtext(thresh_plate, detail=0)
+        ocr_results = reader.readtext(binary_plate, detail=0)
         text_easyocr = ''.join(ocr_results)
         logger.info(f"Extracted Text with EasyOCR: {text_easyocr}")
 

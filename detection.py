@@ -92,8 +92,8 @@ def detect_plate_number(image_path=None, image=None):
     # Run detection
     results = model(img_tensor)
 
-    # Get the detected bounding boxes
-    detections = results.xyxy[0].cpu()  # move back to CPU for processing
+    # YOLOv5 returns detections in the format: [x1, y1, x2, y2, confidence, class]
+    detections = results.xyxy[0]  # Access the bounding boxes, confidences, and classes from results
 
     if len(detections) == 0:
         logger.info("No detections found in the image.")
@@ -101,7 +101,7 @@ def detect_plate_number(image_path=None, image=None):
     else:
         # Loop over detections
         for idx, det in enumerate(detections):
-            x1, y1, x2, y2, conf, cls = det
+            x1, y1, x2, y2, conf, cls = det[:6].cpu().numpy()  # move to CPU and extract values
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
 
             # Adjust padding
@@ -120,13 +120,11 @@ def detect_plate_number(image_path=None, image=None):
             gray_plate = cv2.cvtColor(plate_region, cv2.COLOR_BGR2GRAY)
 
             # Apply CLAHE
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             gray_plate = clahe.apply(gray_plate)
 
             # Apply sharpening
-            kernel = np.array([[0, -1, 0],
-                               [-1, 5,-1],
-                               [0, -1, 0]])
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
             gray_plate = cv2.filter2D(gray_plate, -1, kernel)
 
             # Apply thresholding
@@ -150,59 +148,6 @@ def detect_plate_number(image_path=None, image=None):
             if components:
                 city_code, letter, number = components
 
-                # Apply corrections to city code if necessary
-                if not city_code.isdigit():
-                    city_code = city_code.replace('O', '0').replace('I', '1').replace('Z', '2')
-                logger.info(f"City Code After Correction: {city_code}")
+                return f"{city_code}{letter}{number}"
 
-                # Correct the letter if necessary
-                if not letter.isalpha():
-                    letter_corrections = {
-                        '0': 'O', '6': 'G', '8': 'B', '1': 'I', '5': 'S', '2': 'Z', '7': 'T', '9': 'G'
-                    }
-                    letter = letter_corrections.get(letter, 'A')
-                logger.info(f"Letter After Correction: {letter}")
-
-                # Correct the number if necessary
-                number_original = number
-                number = number.replace('O', '0').replace('I', '1').replace('Z', '2').replace('S', '5')
-                number = number.replace('G', '6').replace('B', '8').replace('Q', '0')
-                number = number.replace('D', '0').replace('A', '4')
-                number = number.replace('?', '7').replace('T', '7')
-                number = re.sub(r'[^0-9]', '', number)  # Remove any non-digit characters
-                number = number[:5]
-                logger.info(f"Number After Correction: {number}")
-
-                # Generate alternative numbers by replacing '2' with '9' and vice versa
-                possible_numbers = [number]
-                if '2' in number:
-                    number_with_9 = number.replace('2', '9')
-                    possible_numbers.append(number_with_9)
-                if '9' in number:
-                    number_with_2 = number.replace('9', '2')
-                    possible_numbers.append(number_with_2)
-                possible_numbers = list(set(possible_numbers))  # Remove duplicates
-
-                # Try all possible numbers
-                plate_scores = []
-                for num in possible_numbers:
-                    corrected_text = f"{city_code}{letter}{num}"
-                    logger.info(f"Trying Number: {num}, Corrected Text: {corrected_text}")
-                    pattern = r'^(2[1-4])[A-Z](\d{1,5})$'
-                    match = re.match(pattern, corrected_text)
-                    if match:
-                        plate_number = f"{city_code}{letter}{num}"
-                        corrections_applied = sum(1 for a, b in zip(number_original, num) if a != b)
-                        plate_scores.append((plate_number, corrections_applied))
-                        logger.info(f"Plate Number Found: {plate_number}, Corrections Applied: {corrections_applied}")
-
-                if plate_scores:
-                    final_plate_number = min(plate_scores, key=lambda x: x[1])[0]
-                    logger.info(f"Final Plate Number: {final_plate_number}")
-                    return final_plate_number
-                else:
-                    logger.warning("No plate number found matching the format after corrections.")
-                    return None
-            else:
-                logger.warning("Failed to extract plate components.")
-                return None
+    return None

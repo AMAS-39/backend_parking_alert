@@ -1,7 +1,7 @@
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import os
 import firebase_admin
@@ -104,15 +104,14 @@ def normalize_plate_number(plate_number):
     plate_number = plate_number.replace(" ", "")
     plate_number = re.sub(r'[^A-Z0-9]', '', plate_number)
     return plate_number
-    
+
 @app.route('/')
 def home():
-    return "Parking Alert Backend is Running!"
+    return render_template('index.html')
 
 @app.route('/process_image', methods=['POST'])
 def process_image():
     try:
-        # Check if the post request has the file part
         if 'image' not in request.files:
             logger.warning("No image part in the request.")
             return jsonify({'success': False, 'message': 'No image part in the request.'}), 400
@@ -130,7 +129,6 @@ def process_image():
             file.save(image_path)
             logger.info(f"Image saved to {image_path}")
 
-            # Detect plate number
             plate_number = detect_plate_number(image_path=image_path)
 
             if not plate_number:
@@ -138,12 +136,8 @@ def process_image():
                 return jsonify({'success': False, 'message': 'No license plate detected.'}), 200
 
             logger.info(f"Detected Plate Number: {plate_number}")
-
-            # Normalize plate number (ensure uppercase and no spaces)
             plate_number = normalize_plate_number(plate_number)
-            logger.info(f"Normalized Plate Number: {plate_number}")
 
-            # Query Firestore using a direct query on the 'users' collection
             logger.info(f"Searching Firestore for plateNumber: '{plate_number}'")
             try:
                 users_ref = db.collection('users')
@@ -152,7 +146,6 @@ def process_image():
                 matching_cars = list(car_docs)
                 logger.info(f"Number of car documents found with plateNumber '{plate_number}': {len(matching_cars)}")
 
-                # Log data for debugging
                 for car_doc in matching_cars:
                     logger.info(f"Matching Car Data: {car_doc.to_dict()}")
 
@@ -166,10 +159,9 @@ def process_image():
                     'success': False,
                     'plate_number': plate_number,
                     'message': f"Plate number {plate_number} not found in database.",
-                    'image_url': image_path  # Optionally return image path for debugging
+                    'image_url': image_path
                 }), 200
 
-            # Assuming plate numbers are unique, but handling multiple matches if any
             notifications_sent = []
             for car_doc in matching_cars:
                 user_ref = car_doc.reference
@@ -184,7 +176,6 @@ def process_image():
                 owner_name = user_data.get('name')
                 owner_email = user_data.get('email')
 
-                # First, send the in-app notification if FCM token exists
                 if fcm_token:
                     notification_sent = send_notification(
                         fcm_token,
@@ -196,7 +187,6 @@ def process_image():
                     else:
                         logger.error(f"Failed to send in-app notification to {owner_name}.")
 
-                # Second, send the email notification
                 email_sent = send_email(owner_email, plate_number)
                 if email_sent:
                     logger.info(f"Email notification sent to {owner_email}.")
